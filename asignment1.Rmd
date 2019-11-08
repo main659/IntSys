@@ -9,6 +9,8 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(GA)
+library(e1071)
+library(dplyr)
 ```
 
 ```{r rosenbrock}
@@ -37,4 +39,81 @@ plot(GA)
 summary(GA)
 
 ```
+
+```{r}
+
+# The sensitivity of a model (recall)
+Sensitivity <- function(observed, predicted, pos.class)
+{
+  t <- table(observed, predicted)
+  
+  t[pos.class, pos.class] / sum(t[pos.class,])
+}
+
+# The specificity of a model
+Specificity <- function(observed, predicted, pos.class)
+{
+  t <- table(observed, predicted)
+  
+  # identify the negative class name
+  neg.class <- which(row.names(t) != pos.class)
+  
+  t[neg.class, neg.class] / sum(t[neg.class,])
+}
+```
+
+
+```{r feature selection}
+
+# Read in the dataset 
+DLBCL <- data.frame(read.csv("DLBCL.csv", header = T, sep = ','))
+numOfAttributes <- length(DLBCL); 
+
+train <- sample_n(DLBCL, 50)
+test <- sample_n(DLBCL, 25)
+
+#classifier
+x <- sample(c(0,1), replace=TRUE, size=numOfAttributes)
+selectedCols <- x*c(1:numOfAttributes)
+selectedCols <- c(selectedCols[selectedCols > 1], 1073)
+
+model <- svm(class ~ ., data = train[selectedCols])
+predicted <- predict(model, train[selectedCols])
+
+observed <- train$class
+
+t <- table(observed, predicted)
+
+sum(diag(t)) / sum(t)
+
+
+#fitness function
+FeatureSelector <- function(x)
+{
+  selectedCols <- x*c(1:numOfAttributes)
+  selectedCols <- c(selectedCols[selectedCols > 1], 1073)
+
+  model <- svm(class ~ ., data = train[selectedCols])
+  pred <- predict(model, train[selectedCols])
+  
+  t <- table(observed, predicted)
+
+  sum(diag(t)) / sum(t)
+}
+
+#TO-DO:Initial population
+#(smaller number of features, class value 0)
+myInitPopulation <- function()
+{
+  
+}
+
+
+GA <- ga(type = "binary", fitness = FeatureSelector, nBits = numOfAttributes, maxiter = 20, run = 5, popSize = 100)
+
+summary(GA)
+
+```
+
+
 
