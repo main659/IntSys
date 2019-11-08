@@ -1,0 +1,181 @@
+---
+title: "Assignment 1"
+author: "David Ocepek, Matevž Eržen"
+date: "8. 11. 2019"
+output: html_document
+---
+
+# Task 1
+
+-----
+
+### What does it mean for a function to be non-convex?
+
+*A real-valued function defined on an n-dimensional interval is called non-convex if the line segment between any two points on the graph of the function crosses the graph of the function.*
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(GA)
+library(e1071)
+library(dplyr)
+
+monitor_1 <- function(obj) 
+{
+  index <- match(max(obj@fitness), obj@fitness)
+  point <- obj@population[index,1:2]
+  points(trans3d(point[1],point[2],f(point[1],point[2]),p1mat), col="darkred", pch=4)
+}
+
+monitor_2 <- function(obj) 
+{
+  index <- match(max(obj@fitness), obj@fitness)
+  point <- obj@population[index,1:2]
+  points(trans3d(point[1],point[2],f(point[1],point[2]),p2mat), col="darkred", pch=4)
+}
+
+monitor_3 <- function(obj) 
+{
+  index <- match(max(obj@fitness), obj@fitness)
+  point <- obj@population[index,1:2]
+  points(trans3d(point[1],point[2],f(point[1],point[2]),p3mat), col="darkred", pch=4)
+}
+
+monitor_4 <- function(obj) 
+{
+  index <- match(max(obj@fitness), obj@fitness)
+  point <- obj@population[index,1:2]
+  points(trans3d(point[1],point[2],f(point[1],point[2]),p4mat), col="darkred", pch=4)
+}
+
+par(mfrow=c(1, 4), mar=c(1,1,1,1))
+```
+
+```{r rosenbrock}
+
+f <- function(x, y)
+{
+  z <- (1 - x)^2 + exp(1) * (y - x^2)^2
+  
+  z
+}
+
+x <- seq(-1,1, length=20)
+y <- x
+z <- outer(x,y,f)
+
+pmat <- persp(x,y,z, col="lightblue", theta=90)
+
+
+p1mat <- persp(x,y,z, col="lightblue", theta=110, phi=5, main="crossover=blx, pmutation=0.1")
+GA1 <- ga(type = "real-valued", fitness = function(x) f(x[1], x[2]), monitor = monitor_1, maxiter = 100, popSize = 50, lower = c(-1, -1), upper = c(1, 1), crossover = gareal_blxCrossover, pmutation = 0.1)
+points(trans3d(GA1@solution[1],GA1@solution[2],f(GA1@solution[1],GA1@solution[2]),p1mat), col="red", pch=21)
+
+p2mat <- persp(x,y,z, col="lightblue", theta=110, phi=5, main="crossover=blx, pmutation=0.5")
+GA2 <- ga(type = "real-valued", fitness = function(x) f(x[1], x[2]), monitor = monitor_2, maxiter = 100, popSize = 50, lower = c(-1, -1), upper = c(1, 1), crossover = gareal_blxCrossover, pmutation = 0.5)
+points(trans3d(GA2@solution[1],GA2@solution[2],f(GA2@solution[1],GA2@solution[2]),p2mat), col="red", pch=21)
+
+p3mat <- persp(x,y,z, col="lightblue", theta=110, phi=5, main="crossover=laplace, pmutation=0.1")
+GA3 <- ga(type = "real-valued", fitness = function(x) f(x[1], x[2]), monitor = monitor_3, maxiter = 100, popSize = 50, lower = c(-1, -1), upper = c(1, 1), crossover = gareal_laplaceCrossover, pmutation = 0.1)
+points(trans3d(GA3@solution[1],GA3@solution[2],f(GA3@solution[1],GA3@solution[2]),p3mat), col="red", pch=21)
+
+p4mat <- persp(x,y,z, col="lightblue", theta=110, phi=5, main="crossover=laplace, pmutation=0.5")
+GA4 <- ga(type = "real-valued", fitness = function(x) f(x[1], x[2]), monitor = monitor_4, maxiter = 100, popSize = 50, lower = c(-1, -1), upper = c(1, 1), crossover = gareal_laplaceCrossover, pmutation = 0.5)
+points(trans3d(GA4@solution[1],GA4@solution[2],f(GA4@solution[1],GA4@solution[2]),p4mat), col="red", pch=21)
+
+```
+
+### How does performance vary when you are increasing the number of iterations?
+
+*Function takes exponentially more time, but doesn't produce any better results (if we are talking about >100 inerations in our case).*
+
+### What about population size?
+
+*Population size doesn't cause as great difference in execution time as increase in number of interations does, but it's still noticable. At the same time it doesn't make a difference if we increase the population size over certain number (in this case 10-20).*
+
+*Both previous answers are based on resoults of testing on this exact problem.*
+
+### Explain the difference between local and global maxima.
+
+*Local maximum is the greatest element in a subset or a given range of a function. Global maximum is the greatest value among all elements in a set or values of a function. There can be multiple local maximas, while there can be only one global maximum.*
+
+
+# Task 2
+
+----
+
+```{r}
+
+# The sensitivity of a model (recall)
+Sensitivity <- function(observed, predicted, pos.class)
+{
+  t <- table(observed, predicted)
+  
+  t[pos.class, pos.class] / sum(t[pos.class,])
+}
+
+# The specificity of a model
+Specificity <- function(observed, predicted, pos.class)
+{
+  t <- table(observed, predicted)
+  
+  # identify the negative class name
+  neg.class <- which(row.names(t) != pos.class)
+  
+  t[neg.class, neg.class] / sum(t[neg.class,])
+}
+```
+
+
+```{r feature selection}
+
+# Read in the dataset 
+DLBCL <- data.frame(read.csv("DLBCL.csv", header = T, sep = ','))
+numOfAttributes <- length(DLBCL); 
+
+train <- sample_n(DLBCL, 50)
+test <- sample_n(DLBCL, 25)
+
+#classifier
+x <- sample(c(0,1), replace=TRUE, size=numOfAttributes)
+selectedCols <- x*c(1:numOfAttributes)
+selectedCols <- c(selectedCols[selectedCols > 1], 1073)
+
+model <- svm(class ~ ., data = train[selectedCols])
+predicted <- predict(model, train[selectedCols])
+
+observed <- train$class
+
+t <- table(observed, predicted)
+
+sum(diag(t)) / sum(t)
+
+
+#fitness function
+FeatureSelector <- function(x)
+{
+  selectedCols <- x*c(1:numOfAttributes)
+  selectedCols <- c(selectedCols[selectedCols > 1], 1073)
+
+  model <- svm(class ~ ., data = train[selectedCols])
+  pred <- predict(model, train[selectedCols])
+  
+  t <- table(observed, predicted)
+
+  sum(diag(t)) / sum(t)
+}
+
+#TO-DO:Initial population
+#(smaller number of features, class value 0)
+myInitPopulation <- function()
+{
+  
+}
+
+
+# GA <- ga(type = "binary", fitness = FeatureSelector, nBits = numOfAttributes, maxiter = 20, run = 5, popSize = 100)
+
+# summary(GA)
+
+```
+
