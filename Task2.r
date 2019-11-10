@@ -75,6 +75,18 @@ confusionMatrix(predicted, dataTest$class)
 predicted <- predict(finalFit, data)
 confusionMatrix(predicted, data$class)
 
+cormat <- apply(data[, 1:1070], 2, cor, y = as.numeric(data$class))
+lst <- sort(cormat, decreasing=TRUE)
+lsttop <- head(lst, sum(GA@solution[1,]))
+
+columns <- seq(1, 1070)
+selectedCol <- columns[as.logical(GA@solution[1,])]
+selectedCol <- append(selectedCol, 1071, after = length(selectedCol))
+plstop <- select(data, selectedCol)
+
+length(intersect(names(lsttop), names(data))) / sum(GA@solution[1,])
+
+
 #columns <- seq(1, 1070)
 #selectedCol <- columns[as.logical(GA@solution[1,])]
 #selectedCol <- append(selectedCol, 1071, after = length(selectedCol))

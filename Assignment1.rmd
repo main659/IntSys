@@ -14,7 +14,7 @@ output: html_document
 *A real-valued function defined on an n-dimensional interval is called non-convex if the line segment between any two points on the graph of the function crosses the graph of the function.*
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
+knitr::opts_chunk$set(echo = TRUE)
 
 library(GA)
 library(e1071)
@@ -54,8 +54,9 @@ monitor_4 <- function(obj)
 monitor_5 <- function(obj) 
 {
   index <- match(max(obj@fitness), obj@fitness)
-  point <- obj@population[index,1:2]
-  points(trans3d(point[1],point[2],f(point[1],point[2]),p5mat), col="darkred", pch=4)
+  y <- sum(obj@population[index,])
+  x <- obj@fitness[index] * y
+  points(trans3d(x,y,f(x,y),p5mat), col="darkred", pch=4)
 }
 
 par(mfrow=c(1, 4), mar=c(1,1,1,1))
@@ -116,7 +117,7 @@ points(trans3d(GA4@solution[1],GA4@solution[2],f(GA4@solution[1],GA4@solution[2]
 
 ```{r feature selection}
 
-data <- read.csv("C:\\Users\\Matevz\\Desktop\\DLBCL.csv", header=TRUE, sep=",")
+data <- read.csv("C:\\Users\\david\\Downloads\\DLBCL.csv", header=TRUE, sep=",")
 data$X = NULL
 data$atclass = NULL
 
@@ -223,7 +224,21 @@ confusionMatrix(predicted, data$class)
 
 ### Compare the final result (set of features) with the same number of features, that correlate the most with the target variable. What do you observe?
 
-*We were able to achieve very high percent of the features with the highest correlation - maybe even to high. This might indicate the overfitting.*
+*We were able to achieve very high percent of the features with the highest correlation - maybe even to high. It is preety understandable that the features that are the most correlated are also the most important and most likely to be present in our results.*
+
+```{r correlation}
+cormat <- apply(data[, 1:1070], 2, cor, y = as.numeric(data$class))
+lst <- sort(cormat, decreasing=TRUE)
+lsttop <- head(lst, sum(GA@solution[1,]))
+
+columns <- seq(1, 1070)
+selectedCol <- columns[as.logical(GA@solution[1,])]
+selectedCol <- append(selectedCol, 1071, after = length(selectedCol))
+plstop <- select(data, selectedCol)
+
+length(intersect(names(lsttop), names(data))) / sum(GA@solution[1,])
+
+```
 
 
 
