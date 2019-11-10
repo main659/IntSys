@@ -14,11 +14,14 @@ output: html_document
 *A real-valued function defined on an n-dimensional interval is called non-convex if the line segment between any two points on the graph of the function crosses the graph of the function.*
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache=TRUE)
 
 library(GA)
 library(e1071)
 library(dplyr)
+library(caret)
+library(parallel)
+library(doParallel)
 
 monitor_1 <- function(obj) 
 {
@@ -46,6 +49,13 @@ monitor_4 <- function(obj)
   index <- match(max(obj@fitness), obj@fitness)
   point <- obj@population[index,1:2]
   points(trans3d(point[1],point[2],f(point[1],point[2]),p4mat), col="darkred", pch=4)
+}
+
+monitor_5 <- function(obj) 
+{
+  index <- match(max(obj@fitness), obj@fitness)
+  point <- obj@population[index,1:2]
+  points(trans3d(point[1],point[2],f(point[1],point[2]),p5mat), col="darkred", pch=4)
 }
 
 par(mfrow=c(1, 4), mar=c(1,1,1,1))
@@ -87,13 +97,13 @@ points(trans3d(GA4@solution[1],GA4@solution[2],f(GA4@solution[1],GA4@solution[2]
 
 ### How does performance vary when you are increasing the number of iterations?
 
-*Function takes exponentially more time, but doesn't produce any better results (if we are talking about >100 inerations in our case).*
+*Function takes exponentially more time, but doesn't produce any better results (if we are talking about >100 iterations in our case).*
 
 ### What about population size?
 
-*Population size doesn't cause as great difference in execution time as increase in number of interations does, but it's still noticable. At the same time it doesn't make a difference if we increase the population size over certain number (in this case 10-20).*
+*Population size doesn't cause as great difference in execution time as increase in number of iterations does, but it's still noticable. At the same time it doesn't make a difference if we increase the population size over certain number (in this case 10-20).*
 
-*Both previous answers are based on resoults of testing on this exact problem.*
+*Both previous answers are based on results of testing on this exact problem.*
 
 ### Explain the difference between local and global maxima.
 
@@ -104,78 +114,111 @@ points(trans3d(GA4@solution[1],GA4@solution[2],f(GA4@solution[1],GA4@solution[2]
 
 ----
 
-```{r}
-
-# The sensitivity of a model (recall)
-Sensitivity <- function(observed, predicted, pos.class)
-{
-  t <- table(observed, predicted)
-  
-  t[pos.class, pos.class] / sum(t[pos.class,])
-}
-
-# The specificity of a model
-Specificity <- function(observed, predicted, pos.class)
-{
-  t <- table(observed, predicted)
-  
-  # identify the negative class name
-  neg.class <- which(row.names(t) != pos.class)
-  
-  t[neg.class, neg.class] / sum(t[neg.class,])
-}
-```
-
-
 ```{r feature selection}
 
-# Read in the dataset 
-DLBCL <- data.frame(read.csv("DLBCL.csv", header = T, sep = ','))
-numOfAttributes <- length(DLBCL); 
+data <- read.csv("C:\\Users\\david\\Downloads\\DLBCL.csv", header=TRUE, sep=",")
+data$X = NULL
+data$atclass = NULL
 
-train <- sample_n(DLBCL, 50)
-test <- sample_n(DLBCL, 25)
+trainIndex <- createDataPartition(data$class, p = .8, list = FALSE, times = 1)
+dataTrain <- data[ trainIndex,]
+dataTest  <- data[-trainIndex,]
 
-#classifier
-x <- sample(c(0,1), replace=TRUE, size=numOfAttributes)
-selectedCols <- x*c(1:numOfAttributes)
-selectedCols <- c(selectedCols[selectedCols > 1], 1073)
+ctrl <- trainControl(
+  number = 3,
+  method="cv"
+)
 
-model <- svm(class ~ ., data = train[selectedCols])
-predicted <- predict(model, train[selectedCols])
-
-observed <- train$class
-
-t <- table(observed, predicted)
-
-sum(diag(t)) / sum(t)
-
-
-#fitness function
-FeatureSelector <- function(x)
+treeModel <- function(binSelection)
 {
-  selectedCols <- x*c(1:numOfAttributes)
-  selectedCols <- c(selectedCols[selectedCols > 1], 1073)
-
-  model <- svm(class ~ ., data = train[selectedCols])
-  pred <- predict(model, train[selectedCols])
+  columns <- seq(1, length(binSelection))
+  selectedCol <- columns[as.logical(binSelection)]
+  selectedCol <- append(selectedCol, length(binSelection) + 1, after = length(selectedCol))
   
-  t <- table(observed, predicted)
-
-  sum(diag(t)) / sum(t)
+  training <- select(dataTrain, selectedCol)
+  
+  plsFit <- train(
+    class ~ .,
+    data = training,
+    method = "ctree",
+    trControl = ctrl
+  )
+  
+  return(plsFit)
 }
 
-#TO-DO:Initial population
-#(smaller number of features, class value 0)
-myInitPopulation <- function()
+fitnessFunc <- function(binSelection)
 {
-  
+  if (sum(binSelection) < 2 || sum(binSelection) > 1000)
+  {
+    return(-1)
+  }
+  else 
+  {
+    plsFit <- treeModel(binSelection)
+    
+    return(mean(plsFit$results$Accuracy)/sum(binSelection))
+  }
 }
 
+f <- f <- function(x, y)
+{
+  z <- x/y
+  
+  z
+}
 
-# GA <- ga(type = "binary", fitness = FeatureSelector, nBits = numOfAttributes, maxiter = 20, run = 5, popSize = 100)
+x <- seq(0,1, length=100)
+y <- seq(3,999, length=100)
+z <- outer(x,y,f)
 
-# summary(GA)
+p5mat <- persp(x,y,z, col="lightblue", theta=110, phi=5, main="crossover=gabin_uCrossover, pmutation=0.2")
+
+GA <- ga(
+  type = "binary", 
+  fitness = fitnessFunc,
+  monitor = monitor_5,
+  crossover = gabin_uCrossover, 
+  elitism = 2, 
+  pmutation = 0.2,
+  nBits = 1070, 
+  maxiter = 100,
+  run = 10, 
+  popSize = 40, 
+  parallel = T, 
+  keepBest = TRUE)
+
+summary(GA)
 
 ```
 
+###Was the feature selection successful?
+
+*Feature selection was succesful. We managed to reduce the number of features by 0.59, reducing the original set of 1070 features to 440 with no significant accuracy loss.*
+
+###The procedure might overfit the data set. How would you prevent it?
+
+*Overfitting is a natural and unavoidable process while training a model and the general solution is splitting the data into a training and test set. The dataset was split 0.8 Training set and 0.2 Test set.*
+
+```{r results}
+#number of features
+sum(GA@solution[1,])
+
+#accuracy of test set and everything combined
+finalFit <- treeModel(GA@solution[1,])
+predicted <- predict(finalFit, dataTest)
+confusionMatrix(predicted, dataTest$class)
+predicted <- predict(finalFit, data)
+confusionMatrix(predicted, data$class)
+
+```
+
+###Suggest how to improve the selection process.
+
+*TO-DO*
+
+###What are some of the key properties of the fitness function?
+
+*Some of the key properties of the fitness function are very negative values for to many or two few features, binarity of input, convexness within boundaries, ...*
+
+###Compare the final result (set of features) with the same number of features, that correlate the most with the target variable. What do you observe?
