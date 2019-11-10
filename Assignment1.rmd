@@ -116,7 +116,7 @@ points(trans3d(GA4@solution[1],GA4@solution[2],f(GA4@solution[1],GA4@solution[2]
 
 ```{r feature selection}
 
-data <- read.csv("C:\\Users\\david\\Downloads\\DLBCL.csv", header=TRUE, sep=",")
+data <- read.csv("C:\\Users\\Matevz\\Desktop\\DLBCL.csv", header=TRUE, sep=",")
 data$X = NULL
 data$atclass = NULL
 
@@ -192,19 +192,19 @@ summary(GA)
 
 ```
 
-###Was the feature selection successful?
+### Was the feature selection successful?
 
-*Feature selection was succesful. We managed to reduce the number of features by 0.59, reducing the original set of 1070 features to 440 with no significant accuracy loss.*
+*Feature selection was succesful. We managed to reduce the number of features by x0.57, reducing the original set of 1070 features to ~460 (varies) with no significant accuracy loss.*
 
-###The procedure might overfit the data set. How would you prevent it?
+### The procedure might overfit the data set. How would you prevent it?
 
-*Overfitting is a natural and unavoidable process while training a model and the general solution is splitting the data into a training and test set. The dataset was split 0.8 Training set and 0.2 Test set.*
+*Overfitting is a natural and unavoidable process while training a model and the general solution is splitting the data into a training and test set. The dataset was split 80% training set and 20% test set.*
 
 ```{r results}
-#number of features
+# Number of features
 sum(GA@solution[1,])
 
-#accuracy of test set and everything combined
+# Accuracy of test set and everything combined
 finalFit <- treeModel(GA@solution[1,])
 predicted <- predict(finalFit, dataTest)
 confusionMatrix(predicted, dataTest$class)
@@ -213,12 +213,19 @@ confusionMatrix(predicted, data$class)
 
 ```
 
-###Suggest how to improve the selection process.
+### Suggest how to improve the selection process.
 
-*TO-DO*
+*There is always room for improvement in terms of creating better fitness function and tweaking parameters of GA. In our case this is very much based on experimentation.*
 
-###What are some of the key properties of the fitness function?
+### What are some of the key properties of the fitness function?
 
-*Some of the key properties of the fitness function are very negative values for to many or two few features, binarity of input, convexness within boundaries, ...*
+*Some of the key properties of the fitness function are negative values for to many or two few features, binarity of input, convexness within boundaries, ...*
 
-###Compare the final result (set of features) with the same number of features, that correlate the most with the target variable. What do you observe?
+### Compare the final result (set of features) with the same number of features, that correlate the most with the target variable. What do you observe?
+
+*We were able to achieve very high percent of the features with the highest correlation - maybe even to high. This might indicate the overfitting.*
+
+
+
+
+
