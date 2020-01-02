@@ -1,0 +1,64 @@
+---
+title: "Assignment2"
+author: "David Ocepek, Matevz Erzen"
+date: "1/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tm)
+library(ggplot2)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cleanning}
+train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
+                   sep = '\t', 
+                   header = TRUE,
+                   stringsAsFactors=FALSE 
+                   )
+test = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\test.tsv",
+                  sep = '\t', 
+                  header = TRUE,
+                  stringsAsFactors=FALSE 
+                  )
+
+handle_special_char <- function(doc)
+{
+  doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
+  doc = gsub("\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
+  doc = gsub("\\[0-9a-fA-F]", " ", doc) #non-alfanumeric chars
+  
+  doc
+}
+
+y = train[,1]
+X = train[,2]
+X <- handle_special_char(X) #Remove special utf8 characters
+X <- Corpus(VectorSource(X))
+#TO-DO: Remove proper nouns
+X <- tm_map(X, content_transformer(tolower)) #Transform to lower
+X <- tm_map(X, removePunctuation) #Remove punctuations
+X <- tm_map(X, removeNumbers) #Remove number
+X <- tm_map(X, removeWords, stopwords("english")) #Remove stopwords
+X <- tm_map(X, stemDocument) #Get radicals
+X <- tm_map(X, stripWhitespace)
+
+#TO-DO: Remove proper nouns
+```
+
+```{r exploration}
+tdm <- TermDocumentMatrix(X)
+termFrequency <- rowSums(as.matrix(tdm))
+qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
+findFreqTerms(tdm, lowfreq=100)
+termFrequency <- subset(termFrequency, termFrequency >= 100)
+qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
+```
