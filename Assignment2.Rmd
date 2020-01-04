@@ -68,16 +68,15 @@ termFrequency <- subset(termFrequency, termFrequency >= 100)
 qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
 ```
 
-```{r vector exploration}
+```{r exploration}
 dtm <- DocumentTermMatrix(X, control = list(minDocFreq=2, minWordLength=3, normalize = TRUE, weighting=weightTfIdf))
 rowTotals <- slam::row_sums(dtm)
 dtm <- dtm[rowTotals > 0, ]
 mat <- as.matrix(dtm)
 
-pca <- prcomp(mat, scale. = TRUE, rank. = 2)
+pca <- prcomp(mat, scale. = TRUE, rank. = 10)
 comp1 <- as.numeric(pca$x[,1])
 comp2 <- as.numeric(pca$x[,2])
-#TO-DO: Fix kmeans
 
 kmeansResult <- kmeans(mat, 2)
 qplot(comp1, comp2, color=kmeansResult$cluster)
@@ -89,5 +88,14 @@ kmeansResult <- kmeans(mat, 16)
 qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
 
-#TO-DO: POS
+#TO-DO: POS taging
 ```
+
+```{r modeling}
+table(y)
+592/(592+233)
+```
+
+###Balance of class distribution
+
+*The class is mildly biased towards label zero, meaning towards documents that are not insults. This is logical because we can assume that most of online chats are not intended to insult someone.
