@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tm)
+library(wordcloud)
 library(ggplot2)
 ```
 
@@ -35,9 +36,14 @@ handle_special_char <- function(doc)
   doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
   doc = gsub("\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
   doc = gsub("\\[0-9a-fA-F]", " ", doc) #non-alfanumeric chars
+  doc = iconv(doc, "latin1", "ASCII", sub="")
   
-  doc
+  return(doc)
 }
+
+conn = file("english.stop.txt", open="r")
+mystopwords = readLines(conn)
+close(conn)
 
 y = train[,1]
 X = train[,2]
@@ -48,17 +54,40 @@ X <- tm_map(X, content_transformer(tolower)) #Transform to lower
 X <- tm_map(X, removePunctuation) #Remove punctuations
 X <- tm_map(X, removeNumbers) #Remove number
 X <- tm_map(X, removeWords, stopwords("english")) #Remove stopwords
+X <- tm_map(X, removeWords, mystopwords) #Remove custom stopwords
 X <- tm_map(X, stemDocument) #Get radicals
-X <- tm_map(X, stripWhitespace)
-
-#TO-DO: Remove proper nouns
+X <- tm_map(X, stripWhitespace) #Have only one white space
 ```
 
-```{r exploration}
+```{r frequency analisys}
 tdm <- TermDocumentMatrix(X)
 termFrequency <- rowSums(as.matrix(tdm))
 qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
 findFreqTerms(tdm, lowfreq=100)
 termFrequency <- subset(termFrequency, termFrequency >= 100)
 qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
+```
+
+```{r vector exploration}
+dtm <- DocumentTermMatrix(X, control = list(minDocFreq=2, minWordLength=3, normalize = TRUE, weighting=weightTfIdf))
+rowTotals <- slam::row_sums(dtm)
+dtm <- dtm[rowTotals > 0, ]
+mat <- as.matrix(dtm)
+
+pca <- prcomp(mat, scale. = TRUE, rank. = 2)
+comp1 <- as.numeric(pca$x[,1])
+comp2 <- as.numeric(pca$x[,2])
+#TO-DO: Fix kmeans
+
+kmeansResult <- kmeans(mat, 2)
+qplot(comp1, comp2, color=kmeansResult$cluster)
+kmeansResult <- kmeans(mat, 4)
+qplot(comp1, comp2, color=kmeansResult$cluster)
+kmeansResult <- kmeans(mat, 8)
+qplot(comp1, comp2, color=kmeansResult$cluster)
+kmeansResult <- kmeans(mat, 16)
+qplot(comp1, comp2, color=kmeansResult$cluster)
+qplot(comp1, comp2, color=y[rowTotals > 0])
+
+#TO-DO: POS
 ```
