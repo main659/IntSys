@@ -8,16 +8,25 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+if (!require("tm")) install.packages("tm")
+if (!require("wordcloud")) install.packages("wordcloud")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("NLP")) install.packages("NLP")
+if (!require("openNLP")) install.packages("openNLP")
+```
+
+```{r libraries}
 library(tm)
 library(wordcloud)
 library(ggplot2)
+library(NLP)
+library(openNLP)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+# Cleaning
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+-----
 
 ```{r cleanning}
 train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
@@ -49,7 +58,7 @@ y = train[,1]
 X = train[,2]
 X <- handle_special_char(X) #Remove special utf8 characters
 X <- Corpus(VectorSource(X))
-#TO-DO: Remove proper nouns
+#TO-DO: Replace proper nouns
 X <- tm_map(X, content_transformer(tolower)) #Transform to lower
 X <- tm_map(X, removePunctuation) #Remove punctuations
 X <- tm_map(X, removeNumbers) #Remove number
@@ -58,6 +67,10 @@ X <- tm_map(X, removeWords, mystopwords) #Remove custom stopwords
 X <- tm_map(X, stemDocument) #Get radicals
 X <- tm_map(X, stripWhitespace) #Have only one white space
 ```
+
+# Exploration
+
+-----
 
 ```{r frequency analisys}
 tdm <- TermDocumentMatrix(X)
@@ -87,15 +100,49 @@ qplot(comp1, comp2, color=kmeansResult$cluster)
 kmeansResult <- kmeans(mat, 16)
 qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
-
-#TO-DO: POS taging
 ```
+
+```{r POS tagging}
+#detach("package:ggplot2", unload=TRUE)
+
+s <- "Steven Allan Spielberg is an American filmmaker and business magnate. Spielberg is consistently considered as one of the leading pioneers of the New Hollywood era, as well as being viewed as one of the most popular and influential filmmakers in the history of cinema."
+s <- as.String(s)
+
+sent_ann <- Maxent_Sent_Token_Annotator()
+sent_ann
+
+a1 <- annotate(s, sent_ann)
+a1
+
+s[a1]
+
+# Generate an annotator which computes word token annotations
+word_ann <- Maxent_Word_Token_Annotator()
+word_ann
+a2 <- annotate(s, word_ann, a1)
+a2
+
+# Extract words
+a2w <- subset(a2, type == "word")
+s[a2w]
+
+
+# Generate an annotator which computes POS tag annotations
+pos_ann <- Maxent_POS_Tag_Annotator()
+pos_ann
+a3 <- annotate(s, pos_ann, a2)
+a3
+```
+
+# Modeling
+
+-----
 
 ```{r modeling}
-table(y)
-592/(592+233)
+tbl <- table(y)
+tbl
+tbl[2]/sum(tbl)
 ```
 
-###Balance of class distribution
 
-*The class is mildly biased towards label zero, meaning towards documents that are not insults. This is logical because we can assume that most of online chats are not intended to insult someone.
+*The class is mildly biased towards label zero, meaning towards documents that are not insults. This is logical because we can assume that most of online chats are not intended to insult someone.*
