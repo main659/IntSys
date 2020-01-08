@@ -13,6 +13,7 @@ if (!require("wordcloud")) install.packages("wordcloud")
 if (!require("ggplot2")) install.packages("ggplot2")
 if (!require("NLP")) install.packages("NLP")
 if (!require("openNLP")) install.packages("openNLP")
+if (!require("stringi")) install.packages("stringi")
 ```
 
 ```{r libraries}
@@ -29,23 +30,26 @@ library(openNLP)
 -----
 
 ```{r cleanning}
-train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
-                   sep = '\t', 
-                   header = TRUE,
-                   stringsAsFactors=FALSE 
-                   )
-test = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\test.tsv",
-                  sep = '\t', 
-                  header = TRUE,
-                  stringsAsFactors=FALSE 
-                  )
+train_dir <- "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv"
+test_dir <- "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\test.tsv"
+
+train = read.table(file = train_dir, sep = '\t', header = TRUE, stringsAsFactors=FALSE)
+test = read.table(file = test_dir, sep = '\t', header = TRUE, stringsAsFactors=FALSE)
 
 handle_special_char <- function(doc)
 {
-  doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
-  doc = gsub("\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
-  doc = gsub("\\[0-9a-fA-F]", " ", doc) #non-alfanumeric chars
-  doc = iconv(doc, "latin1", "ASCII", sub="")
+  doc = iconv(doc, "ASCII", "ASCII", sub="") #make sure there are no invalid chars
+                                             #checked with stri_enc_mark: All are ASCII
+  doc = gsub("\\\\\\\\", "\\\\", doc) #remove backslash padding
+  doc = gsub("\\\\xa0", " ", doc) #handle non-carriage return line break
+  doc = gsub("\\\\xc2", "", doc) #handle garbage character
+  doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #handle other UTF-8 characters
+  
+  doc = gsub("\\\\\'", "'", doc) #handle single parenthesys
+  doc = gsub("\\\\\"", "\"", doc) #handle double parenthesys
+  doc = gsub("\\\\n", " ", doc) #handle new line
+  doc = gsub("\\\\t", " ", doc) #handle tab
+  doc = gsub("\\\\[0-9a-fA-F]", " ", doc) #handle other special characters
   
   return(doc)
 }
@@ -87,7 +91,7 @@ rowTotals <- slam::row_sums(dtm)
 dtm <- dtm[rowTotals > 0, ]
 mat <- as.matrix(dtm)
 
-pca <- prcomp(mat, scale. = TRUE, rank. = 10)
+pca <- prcomp(mat, scale. = TRUE, rank. = 2)
 comp1 <- as.numeric(pca$x[,1])
 comp2 <- as.numeric(pca$x[,2])
 
@@ -100,52 +104,23 @@ qplot(comp1, comp2, color=kmeansResult$cluster)
 kmeansResult <- kmeans(mat, 16)
 qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
+
+#TO-DO: word2vec
 ```
-```{r cleanning}
-train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
-                   sep = '\t',
-                   quote = "",
-                   header = TRUE
-                   )
-
-handle_special_char <- function(doc)
-{
-  doc = iconv(doc, "latin1", "ASCII", sub="")
-  doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
-  doc = gsub("\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
-  doc = gsub("\\[0-9a-fA-F]", " ", doc) #non-alfanumeric chars
-  
-  return(doc)
-}
-
-conn = file("english.stop.txt", open="r")
-mystopwords = readLines(conn)
-close(conn)
-
-X = train[,2]
-X <- handle_special_char(X) #Remove special utf8 characters
-X <- Corpus(VectorSource(X))
-```
-
 
 ```{r POS tagging}
-#detach("package:ggplot2", unload=TRUE)
-
-train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
-                   sep = '\t', 
-                   header = TRUE,
-                   stringsAsFactors=FALSE 
-                   )
+detach("package:caret", unload=TRUE)
+detach("package:ggplot2", unload=TRUE)
+if("ggplot2" %in% (.packages())) detach("package:ggplot2", unload=TRUE)
 
 X = train[,2]
 X <- handle_special_char(X) #Remove special utf8 characters
-X = gsub("\\\\", " ", X) #not the best way to remove slashes
 
 sent_ann <- Maxent_Sent_Token_Annotator()
 word_ann <- Maxent_Word_Token_Annotator()
 pos_ann <- Maxent_POS_Tag_Annotator()
 
-doctags <- vector()
+doctags <- vector("list", length(X))
 
 for (i in 1:length(X))
 {
@@ -158,15 +133,18 @@ for (i in 1:length(X))
   a3w <- subset(a3, type == "word")
   
   tags <- vector()
-  for (i in 1:length(a3$features))
-    tags <- c(tags, a3$features[[i]]$POS)
+  for (j in 1:length(a3$features))
+    tags <- c(tags, a3$features[[j]]$POS)
   
   table(tags)
   
   tokenPOS <- cbind(s[a3w], tags)
-  #TO-DO: join into table
+  doctags[[i]] <- s[a3w]
 }
+
+#TO-DO: Meaningfully demonstrate POS tagging
 ```
+
 
 # Modeling
 
