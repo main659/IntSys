@@ -61,6 +61,49 @@ close(conn)
 y = train[,1]
 X = train[,2]
 X <- handle_special_char(X) #Remove special utf8 characters
+```
+
+
+
+```{r transform to vector}
+
+if (FALSE) {
+build_noun_lists <- function(doc)
+{
+  sent_ann <- Maxent_Sent_Token_Annotator()
+  word_ann <- Maxent_Word_Token_Annotator() 
+  person_ann <- Maxent_Entity_Annotator(kind = "person")
+  location_ann <- Maxent_Entity_Annotator(kind = "location")
+  organization_ann <- Maxent_Entity_Annotator(kind = "organization")
+  
+  prsn <- vector("list", length(X))
+  loct <- vector("list", length(X))
+  org <- vector("list", length(X))
+
+  for (i in 1:length(X))
+  {
+    s <- as.String(X[i])
+    
+    a1 <- annotate(s, sent_ann)
+    a2 <- annotate(s, word_ann, a1)
+    a2w <- subset(a2, type == "word")
+    a3 <- annotate(s, pos_ann, a2)
+    a3w <- subset(a3, type == "word")
+    
+    tags <- vector()
+    for (j in 1:length(a3$features))
+      tags <- c(tags, a3$features[[j]]$POS)
+    
+    table(tags)
+    
+    tokenPOS <- cbind(s[a3w], tags)
+    prsn[[i]] <- s[a3w]
+  }
+  
+  return(doctags)
+}
+}
+
 X <- Corpus(VectorSource(X))
 #TO-DO: Replace proper nouns
 X <- tm_map(X, content_transformer(tolower)) #Transform to lower
@@ -104,13 +147,39 @@ qplot(comp1, comp2, color=kmeansResult$cluster)
 kmeansResult <- kmeans(mat, 16)
 qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
+```
 
-#TO-DO: word2vec
+```{r dbscan}
+if (!require("proxy")) install.packages("proxy")
+if (!require("dbscan")) install.packages("dbscan")
+library(dbscan)
+library(proxy)
+
+dist.matrix = proxy::dist(mat, method = "cosine")
+db_clustering <- dbscan(dist.matrix, eps = 0.75, minPts = 3)
+
+#TO-DO: Representation
+```
+
+```{r word2vec}
+#library(purrrlyr)
+library(text2vec)
+library(caret)
+
+X = train[,2]
+X <- handle_special_char(X)
+
+it_train <- itoken(X, tolower, word_tokenizer, progressbar = TRUE)
+vocab <- create_vocabulary(it_train)
+vectorizer <- vocab_vectorizer(vocab)
+dtm_train <- create_dtm(it_train, vectorizer)
+#TO-DO: Train word2vec
+mat <- as.matrix(dtm_train)
+kmeansResult <- kmeans(dtm_train, 2)
+qplot(comp1, comp2, color=kmeansResult$cluster)
 ```
 
 ```{r POS tagging}
-detach("package:caret", unload=TRUE)
-detach("package:ggplot2", unload=TRUE)
 if("ggplot2" %in% (.packages())) detach("package:ggplot2", unload=TRUE)
 
 X = train[,2]
