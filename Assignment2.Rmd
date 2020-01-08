@@ -101,37 +101,71 @@ kmeansResult <- kmeans(mat, 16)
 qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
 ```
+```{r cleanning}
+train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
+                   sep = '\t',
+                   quote = "",
+                   header = TRUE
+                   )
+
+handle_special_char <- function(doc)
+{
+  doc = iconv(doc, "latin1", "ASCII", sub="")
+  doc = gsub("\\\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
+  doc = gsub("\\x[0-9a-fA-F]{2}", " ", doc) #UTF-8 characters
+  doc = gsub("\\[0-9a-fA-F]", " ", doc) #non-alfanumeric chars
+  
+  return(doc)
+}
+
+conn = file("english.stop.txt", open="r")
+mystopwords = readLines(conn)
+close(conn)
+
+X = train[,2]
+X <- handle_special_char(X) #Remove special utf8 characters
+X <- Corpus(VectorSource(X))
+```
+
 
 ```{r POS tagging}
 #detach("package:ggplot2", unload=TRUE)
 
-s <- "Steven Allan Spielberg is an American filmmaker and business magnate. Spielberg is consistently considered as one of the leading pioneers of the New Hollywood era, as well as being viewed as one of the most popular and influential filmmakers in the history of cinema."
-s <- as.String(s)
+train = read.table(file = "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv",
+                   sep = '\t', 
+                   header = TRUE,
+                   stringsAsFactors=FALSE 
+                   )
+
+X = train[,2]
+X <- handle_special_char(X) #Remove special utf8 characters
+X = gsub("\\\\", " ", X) #not the best way to remove slashes
 
 sent_ann <- Maxent_Sent_Token_Annotator()
-sent_ann
-
-a1 <- annotate(s, sent_ann)
-a1
-
-s[a1]
-
-# Generate an annotator which computes word token annotations
 word_ann <- Maxent_Word_Token_Annotator()
-word_ann
-a2 <- annotate(s, word_ann, a1)
-a2
-
-# Extract words
-a2w <- subset(a2, type == "word")
-s[a2w]
-
-
-# Generate an annotator which computes POS tag annotations
 pos_ann <- Maxent_POS_Tag_Annotator()
-pos_ann
-a3 <- annotate(s, pos_ann, a2)
-a3
+
+doctags <- vector()
+
+for (i in 1:length(X))
+{
+  s <- as.String(X[i])
+  
+  a1 <- annotate(s, sent_ann)
+  a2 <- annotate(s, word_ann, a1)
+  a2w <- subset(a2, type == "word")
+  a3 <- annotate(s, pos_ann, a2)
+  a3w <- subset(a3, type == "word")
+  
+  tags <- vector()
+  for (i in 1:length(a3$features))
+    tags <- c(tags, a3$features[[i]]$POS)
+  
+  table(tags)
+  
+  tokenPOS <- cbind(s[a3w], tags)
+  #TO-DO: join into table
+}
 ```
 
 # Modeling
