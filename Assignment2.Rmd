@@ -195,14 +195,13 @@ qplot(comp1, comp2, color=y[rowTotals > 0])
 
 *Dbscan is generraly robust to outlier and the eps and minPoints were choosen with care meaning the problem is that the vectors themselves simply don't differ enought. More accuratelly the differences don't mirror the class distribution enought.*
 
-*I use word2vec to better fit the vector representation to the class distribution.(Currently not working)*
+*I use word2vec to better fit the vector representation to the class distribution. The fit is visibly better, mainly because it creates vector representations based on the target classes. Similairy to LDA it tries to have vectors from the same class be close to each other i.e. similair.*
 
 
 ```{r word2vec}
 detach("package:dbscan", unload=TRUE)
 detach("package:proxy", unload=TRUE)
 
-#library(purrrlyr)
 library(text2vec)
 
 X = train[,2]
@@ -212,10 +211,15 @@ it_train <- itoken(X, tolower, word_tokenizer)
 vocab <- create_vocabulary(it_train)
 vectorizer <- vocab_vectorizer(vocab)
 dtm_train <- create_dtm(it_train, vectorizer)
-#TO-DO: Train word2vec
+tfidf <- TfIdf$new()
+dtm_train_tfidf <- fit_transform(dtm_train, tfidf)
 mat <- as.matrix(dtm_train)
-kmeansResult <- kmeans(dtm_train, 16)
-#qplot(comp1, comp2, color=kmeansResult$cluster)
+kmeansResult <- kmeans(dtm_train, 2)
+pca <- prcomp(mat, scale. = TRUE, rank. = 2)
+comp1 <- as.numeric(pca$x[,1])
+comp2 <- as.numeric(pca$x[,2])
+qplot(comp1, comp2, color=kmeansResult$cluster)
+qplot(comp1, comp2, color=y)
 ```
 
 *While I used POS tagging earlier when I was anonimizing proper nouns. It can also be used to inject further knowladge into our data. (However this raises the dimensionality of are vector space as such it should be used only with models that have a veriance high enough to benefit from this.)*
