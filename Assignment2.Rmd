@@ -1,6 +1,6 @@
 ---
 title: "Assignment2"
-author: "David Ocepek, Matevz Erzen"
+author: "David Ocepek"
 date: "1/1/2020"
 output: html_document
 ---
@@ -19,7 +19,6 @@ if (!require("stringi")) install.packages("stringi")
 ```{r libraries}
 library(tm)
 library(wordcloud)
-library(ggplot2)
 library(NLP)
 library(openNLP)
 ```
@@ -28,6 +27,10 @@ library(openNLP)
 # Cleaning
 
 -----
+
+*We read the train data, split the data into y a target label vector and X a character vector, each entry representing a document.*
+
+*The documents themselves where already transliterated to avoid character problems and again by R. Because of this there are many string of the form \\\\\\\\x[0-9a-fA-F]{2}, \\\\\\\\[0-9a-fA-F], \\\\x[0-9a-fA-F]{2}, \\\\[0-9a-fA-F], that are not part of the original text and therefore should be removed.*
 
 ```{r cleanning}
 train_dir <- "C:\\Users\\david\\OneDrive\\Dokumente\\GitHub\\IntelligentSystems\\insults\\train.tsv"
@@ -61,51 +64,63 @@ close(conn)
 y = train[,1]
 X = train[,2]
 X <- handle_special_char(X) #Remove special utf8 characters
+
+X[1]
 ```
 
 
+*Now that the array of documents is in proper order each document has to be vectorized. I first anonymize proper nouns with the use of POS tagging. This has the benefit of injecting the model with knowladge that all proper nouns should be treated similairly and reducing the dimensionality of our vector space.*
+
+*To further reduce the vector space, I transform any uppercase letters to lowercase. Because I have already anonymized the proper nouns, I can assume there will be a minimal loss in information.*
+
+*Numbers are not neccessary as such they are removed.*
+
+*Common word are removed as they have a low probability of differentiating between insult and non-insult as there presence in both on average is almost garranteed.*
+
+*While at a loss to some information I also radicalize the words therefore allowing the algorithm to find similarity between similair words.*
+
+*This generates a lot of whitespaces which I minimize to 1 whitespace.*
 
 ```{r transform to vector}
+detach("package:ggplot2", unload=TRUE)
 
-if (FALSE) {
-build_noun_lists <- function(doc)
+nnp_anonimize <- function(doc)
 {
-  sent_ann <- Maxent_Sent_Token_Annotator()
-  word_ann <- Maxent_Word_Token_Annotator() 
-  person_ann <- Maxent_Entity_Annotator(kind = "person")
-  location_ann <- Maxent_Entity_Annotator(kind = "location")
-  organization_ann <- Maxent_Entity_Annotator(kind = "organization")
-  
-  prsn <- vector("list", length(X))
-  loct <- vector("list", length(X))
-  org <- vector("list", length(X))
+sent_ann <- Maxent_Sent_Token_Annotator()
+word_ann <- Maxent_Word_Token_Annotator()
+pos_ann <- Maxent_POS_Tag_Annotator()
 
-  for (i in 1:length(X))
+for (i in 1:length(doc))
+{
+  s <- as.String(doc[i])
+  
+  a1 <- annotate(s, sent_ann)
+  a2 <- annotate(s, word_ann, a1)
+  a2w <- subset(a2, type == "word")
+  a3 <- annotate(s, pos_ann, a2)
+  a3w <- subset(a3, type == "word")
+  
+  tags <- vector()
+  for (j in 1:length(a3$features))
+    tags <- c(tags, a3$features[[j]]$POS)
+  
+  tokenPOS <- cbind(s[a3w], tags)
+  nnp_names <- tokenPOS[tokenPOS[,2] == "NNP", 1] #List of proper names
+  
+  if (length(nnp_names) == 0) #no proper nouns here
+    next
+  
+  for (j in 1:length(nnp_names))
   {
-    s <- as.String(X[i])
-    
-    a1 <- annotate(s, sent_ann)
-    a2 <- annotate(s, word_ann, a1)
-    a2w <- subset(a2, type == "word")
-    a3 <- annotate(s, pos_ann, a2)
-    a3w <- subset(a3, type == "word")
-    
-    tags <- vector()
-    for (j in 1:length(a3$features))
-      tags <- c(tags, a3$features[[j]]$POS)
-    
-    table(tags)
-    
-    tokenPOS <- cbind(s[a3w], tags)
-    prsn[[i]] <- s[a3w]
+    doc[i] = gsub(as.String(nnp_names[j]), "it", doc[i], fixed=TRUE)
   }
-  
-  return(doctags)
 }
+  
+  return(doc)
 }
 
+X <- nnp_anonimize(X)
 X <- Corpus(VectorSource(X))
-#TO-DO: Replace proper nouns
 X <- tm_map(X, content_transformer(tolower)) #Transform to lower
 X <- tm_map(X, removePunctuation) #Remove punctuations
 X <- tm_map(X, removeNumbers) #Remove number
@@ -113,14 +128,23 @@ X <- tm_map(X, removeWords, stopwords("english")) #Remove stopwords
 X <- tm_map(X, removeWords, mystopwords) #Remove custom stopwords
 X <- tm_map(X, stemDocument) #Get radicals
 X <- tm_map(X, stripWhitespace) #Have only one white space
+
+X[[1]]$content
 ```
+
 
 # Exploration
 
 -----
 
+*I construct a term document matrix to inspect the frequency of term occurence and data in general.*
+
+
 ```{r frequency analisys}
+library(ggplot2)
+
 tdm <- TermDocumentMatrix(X)
+tdm
 termFrequency <- rowSums(as.matrix(tdm))
 qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
 findFreqTerms(tdm, lowfreq=100)
@@ -128,11 +152,16 @@ termFrequency <- subset(termFrequency, termFrequency >= 100)
 qplot(seq(length(termFrequency)),sort(termFrequency), xlab = "index", ylab = "Freq")
 ```
 
+*From the graphs it is visible that less than 20 of the almost 8000 terma appear in more than 100 document(the total number of documents is 825). Because of this the term-document and document-term matrix are 100% sparse. The solution is to reduce the matrix space by balancing the number of terms in the matrix with the information they present us with.*
+
+*I perform kmeans clustering projected onto a 2D plane and compare it to the distribution of the target classes. The results are not great, but some parts of the distinction between the classes is visible on plot k=16.*
+
 ```{r exploration}
-dtm <- DocumentTermMatrix(X, control = list(minDocFreq=2, minWordLength=3, normalize = TRUE, weighting=weightTfIdf))
+dtm <- DocumentTermMatrix(X, control = list(minDocFreq=5, minWordLength=4, normalize = TRUE, weighting=weightTfIdf))
 rowTotals <- slam::row_sums(dtm)
 dtm <- dtm[rowTotals > 0, ]
-mat <- as.matrix(dtm)
+dtm2 <- removeSparseTerms(dtm, sparse=0.99)
+mat <- as.matrix(dtm2)
 
 pca <- prcomp(mat, scale. = TRUE, rank. = 2)
 comp1 <- as.numeric(pca$x[,1])
@@ -149,6 +178,8 @@ qplot(comp1, comp2, color=kmeansResult$cluster)
 qplot(comp1, comp2, color=y[rowTotals > 0])
 ```
 
+*I try a the more robust dbscan clustering with cosine distance. The resemblance of this plot is much closser to the actual class distribution. I attribute this to the use of the cosine distance.*
+
 ```{r dbscan}
 if (!require("proxy")) install.packages("proxy")
 if (!require("dbscan")) install.packages("dbscan")
@@ -156,40 +187,54 @@ library(dbscan)
 library(proxy)
 
 dist.matrix = proxy::dist(mat, method = "cosine")
-db_clustering <- dbscan(dist.matrix, eps = 0.75, minPts = 3)
+db_clustering <- dbscan(dist.matrix, eps = 0.7, minPts = 5)
 
-#TO-DO: Representation
+qplot(comp1, comp2, color=db_clustering$cluster)
+qplot(comp1, comp2, color=y[rowTotals > 0])
 ```
 
+*Dbscan is generraly robust to outlier and the eps and minPoints were choosen with care meaning the problem is that the vectors themselves simply don't differ enought. More accuratelly the differences don't mirror the class distribution enought.*
+
+*I use word2vec to better fit the vector representation to the class distribution.(Currently not working)*
+
+
 ```{r word2vec}
+detach("package:dbscan", unload=TRUE)
+detach("package:proxy", unload=TRUE)
+
 #library(purrrlyr)
 library(text2vec)
-library(caret)
 
 X = train[,2]
 X <- handle_special_char(X)
 
-it_train <- itoken(X, tolower, word_tokenizer, progressbar = TRUE)
+it_train <- itoken(X, tolower, word_tokenizer)
 vocab <- create_vocabulary(it_train)
 vectorizer <- vocab_vectorizer(vocab)
 dtm_train <- create_dtm(it_train, vectorizer)
 #TO-DO: Train word2vec
 mat <- as.matrix(dtm_train)
-kmeansResult <- kmeans(dtm_train, 2)
-qplot(comp1, comp2, color=kmeansResult$cluster)
+kmeansResult <- kmeans(dtm_train, 16)
+#qplot(comp1, comp2, color=kmeansResult$cluster)
 ```
 
+*While I used POS tagging earlier when I was anonimizing proper nouns. It can also be used to inject further knowladge into our data. (However this raises the dimensionality of are vector space as such it should be used only with models that have a veriance high enough to benefit from this.)*
+
 ```{r POS tagging}
-if("ggplot2" %in% (.packages())) detach("package:ggplot2", unload=TRUE)
+detach("package:ggplot2", unload=TRUE)
 
 X = train[,2]
 X <- handle_special_char(X) #Remove special utf8 characters
+
+X[1]
 
 sent_ann <- Maxent_Sent_Token_Annotator()
 word_ann <- Maxent_Word_Token_Annotator()
 pos_ann <- Maxent_POS_Tag_Annotator()
 
 doctags <- vector("list", length(X))
+docbag <- vector("list", length(X))
+posbag <- vector("list", length(X))
 
 for (i in 1:length(X))
 {
@@ -205,13 +250,13 @@ for (i in 1:length(X))
   for (j in 1:length(a3$features))
     tags <- c(tags, a3$features[[j]]$POS)
   
-  table(tags)
-  
   tokenPOS <- cbind(s[a3w], tags)
   doctags[[i]] <- s[a3w]
+  docbag[[i]] <- tokenPOS
+  posbag[[i]] <- tokenPOS[,2]
 }
 
-#TO-DO: Meaningfully demonstrate POS tagging
+posbag[[1]]
 ```
 
 
@@ -219,11 +264,10 @@ for (i in 1:length(X))
 
 -----
 
+*The class is biased towards label zero, meaning towards documents that are not insults or insulting. This is logical because we can assume that most of online chats are not intended to insult someone.*
+
 ```{r modeling}
 tbl <- table(y)
 tbl
 tbl[2]/sum(tbl)
 ```
-
-
-*The class is mildly biased towards label zero, meaning towards documents that are not insults. This is logical because we can assume that most of online chats are not intended to insult someone.*
