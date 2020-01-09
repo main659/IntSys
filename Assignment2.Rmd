@@ -2,7 +2,9 @@
 title: "Assignment2"
 author: "David Ocepek"
 date: "1/1/2020"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -219,6 +221,24 @@ pca <- prcomp(mat, scale. = TRUE, rank. = 2)
 comp1 <- as.numeric(pca$x[,1])
 comp2 <- as.numeric(pca$x[,2])
 qplot(comp1, comp2, color=kmeansResult$cluster)
+```
+
+```{r dbscan for move2vec}
+if (!require("proxy")) install.packages("proxy")
+if (!require("dbscan")) install.packages("dbscan")
+library(dbscan)
+library(proxy)
+
+dist.matrix = proxy::dist(mat, method = "cosine")
+db_clustering <- dbscan(dist.matrix, eps = 0.7, minPts = 5)
+
+qplot(comp1, comp2, color=db_clustering$cluster)
+
+detach("package:dbscan", unload=TRUE)
+detach("package:proxy", unload=TRUE)
+```
+
+```{r class distribution}
 qplot(comp1, comp2, color=y)
 ```
 
